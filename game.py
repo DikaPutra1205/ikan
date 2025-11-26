@@ -1,8 +1,8 @@
 import pygame
 import cv2
 import mediapipe as mp
-import math
 import random
+<<<<<<< HEAD
 import json
 import os
 import numpy as np
@@ -1033,6 +1033,14 @@ class Tutorial:
                 text = small_font.render(control, True, color)
                 surface.blit(text, (controls_x, controls_y + i * 22))
 
+=======
+import math
+from src.config import *
+from src.assets import assets
+from src.sprites import Player, BotFish, Particle, PowerUp
+from src.utils import SaveData, BackgroundLayer, get_random_spawn_level, apply_screen_shake
+from src.ui import PauseMenu, WelcomeScreen, Tutorial, Notification, draw_progress_bar
+>>>>>>> b87a9fd8646a6b19aade318cb25029a8339bbfb0
 
 # =====================
 # Setup Mediapipe
@@ -1044,62 +1052,106 @@ face_mesh = mp_face_mesh.FaceMesh(
     min_detection_confidence=0.5,
     min_tracking_confidence=0.5
 )
-cap = cv2.VideoCapture(0)
-if not cap.isOpened():
-    print("Error: Tidak bisa membuka kamera.")
-    exit()
 
-# =====================
-# Game init
-# =====================
-all_sprites = pygame.sprite.Group()
-bot_fish_group = pygame.sprite.Group()
-particle_group = pygame.sprite.Group()
-powerup_group = pygame.sprite.Group()
+def init_camera():
+    cap = cv2.VideoCapture(0)
+    if not cap.isOpened():
+        print("Error: Tidak bisa membuka kamera.")
+        return None
+    return cap
 
-player = Player()
-all_sprites.add(player)
-
-# Background layers
-bg_layers = [
-    BackgroundLayer(0, 0.5, (100, 150, 200), 'bubble'),
-    BackgroundLayer(0, 1.0, (80, 120, 160), 'bubble'),
-    BackgroundLayer(0, 0.3, (60, 100, 140), 'seaweed')
-]
-
-# Game state
-pause_menu = PauseMenu()
-tutorial = Tutorial()
-save_data = SaveData()
-welcome_screen = WelcomeScreen()
-notifications = []
-
-last_spawn_time = pygame.time.get_ticks()
-last_powerup_spawn = pygame.time.get_ticks()
-
-running = True
-game_over = False
-win = False
-paused = False
-game_started = False  # Game only starts after welcome screen
-screen_shake_intensity = 0
-
-# Start BGM
-play_bgm('bgm_gameplay', volume=0.3)
-
-# =====================
-# Main loop
-# =====================
-while running:
-    dt = clock.tick(30)
+def main():
+    pygame.init()
+    screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
+    pygame.display.set_caption("Feeding Frenzy: Evolution (Modular)")
+    clock = pygame.time.Clock()
     
-    key = cv2.waitKey(1) & 0xFF
-    if key == ord('q'):
-        running = False
+    # Load Assets
+    assets.load_assets()
+    assets.play_bgm('bgm_gameplay', volume=0.3)
 
-    for event in pygame.event.get():
-        if event.type == pygame.QUIT:
+    # Init Camera
+    cap = init_camera()
+    if not cap:
+        return
+
+    # Groups
+    all_sprites = pygame.sprite.Group()
+    bot_fish_group = pygame.sprite.Group()
+    particle_group = pygame.sprite.Group()
+    powerup_group = pygame.sprite.Group()
+
+    player = Player()
+    all_sprites.add(player)
+
+    # Systems
+    bg_layers = [
+        BackgroundLayer(0, 0.5, (100, 150, 200), 'bubble'),
+        BackgroundLayer(0, 1.0, (80, 120, 160), 'bubble'),
+        BackgroundLayer(0, 0.3, (60, 100, 140), 'seaweed')
+    ]
+    
+    save_data = SaveData()
+    pause_menu = PauseMenu()
+    welcome_screen = WelcomeScreen()
+    tutorial = Tutorial()
+    notifications = []
+    
+    last_spawn_time = pygame.time.get_ticks()
+    last_powerup_spawn = pygame.time.get_ticks()
+    
+    running = True
+    game_over = False
+    win = False
+    paused = False
+    game_started = False
+    screen_shake_intensity = 0
+
+    def reset_game():
+        nonlocal game_over, win, paused, game_started, player, last_spawn_time, notifications, tutorial, welcome_screen
+        save_data.update_stats(player.score, player.fish_eaten, player.level, player.max_combo)
+        game_over = False
+        win = False
+        # paused = False # Don't reset paused state if coming from menu, handle outside
+        # game_started stays False if full reset, or True if just restart level?
+        # Let's assume full restart goes back to welcome or just gameplay
+        all_sprites.empty()
+        bot_fish_group.empty()
+        particle_group.empty()
+        powerup_group.empty()
+        
+        player = Player()
+        all_sprites.add(player)
+        last_spawn_time = pygame.time.get_ticks()
+        notifications = []
+        tutorial = Tutorial()
+        welcome_screen = WelcomeScreen() # Show welcome again on full restart
+
+    def quick_restart():
+        nonlocal game_over, win, paused, player, last_spawn_time, notifications, tutorial
+        save_data.update_stats(player.score, player.fish_eaten, player.level, player.max_combo)
+        game_over = False
+        win = False
+        all_sprites.empty()
+        bot_fish_group.empty()
+        particle_group.empty()
+        powerup_group.empty()
+        
+        player = Player()
+        all_sprites.add(player)
+        last_spawn_time = pygame.time.get_ticks()
+        notifications = []
+        tutorial = Tutorial()
+        tutorial.show_next_tip()
+
+    while running:
+        dt = clock.tick(FPS)
+        
+        # CV2 Input
+        key = cv2.waitKey(1) & 0xFF
+        if key == ord('q'):
             running = False
+<<<<<<< HEAD
         
         if event.type == pygame.KEYDOWN:
             if event.key == pygame.K_F11:
@@ -1111,74 +1163,336 @@ while running:
                 game_started = True
                 tutorial.show_next_tip()  # Show first tip after welcome
                 continue
+=======
+
+        # Pygame Events
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                running = False
+>>>>>>> b87a9fd8646a6b19aade318cb25029a8339bbfb0
             
-            # Pause
-            if event.key == pygame.K_ESCAPE and not game_over and not win:
-                pause_menu.toggle()
-                paused = pause_menu.active
-            
-            # Pause menu navigation
-            if paused:
-                action = pause_menu.handle_input(event)
-                if action == 'Resume':
-                    pause_menu.toggle()
-                    paused = False
-                elif action == 'Restart':
-                    # Reset game
-                    save_data.update_stats(player.score, player.fish_eaten, player.level, player.max_combo)
-                    game_over = False
-                    win = False
-                    paused = False
-                    pause_menu.active = False
-                    all_sprites.empty()
-                    bot_fish_group.empty()
-                    particle_group.empty()
-                    powerup_group.empty()
-                    player = Player()
-                    all_sprites.add(player)
-                    last_spawn_time = pygame.time.get_ticks()
-                    notifications.clear()
-                    tutorial = Tutorial()
+            if event.type == pygame.KEYDOWN:
+                if welcome_screen.active:
+                    welcome_screen.skip()
+                    game_started = True
                     tutorial.show_next_tip()
-                elif action == 'Quit':
-                    save_data.update_stats(player.score, player.fish_eaten, player.level, player.max_combo)
-                    running = False
-            
-            # Restart after game over/win
-            if (game_over or win) and event.key == pygame.K_r:
-                save_data.update_stats(player.score, player.fish_eaten, player.level, player.max_combo)
-                game_over = False
-                win = False
-                game_started = False  # Show welcome screen again
-                all_sprites.empty()
-                bot_fish_group.empty()
-                particle_group.empty()
-                powerup_group.empty()
-                player = Player()
-                all_sprites.add(player)
-                last_spawn_time = pygame.time.get_ticks()
-                notifications.clear()
-                tutorial = Tutorial()
-                welcome_screen = WelcomeScreen()  # Reset welcome screen
-            
-            # Ultimate activation
-            if event.key == pygame.K_SPACE and not game_over and not win and not paused and game_started:
-                if player.activate_ultimate():
-                    notifications.append(Notification("FEEDING FRENZY!", (255, 215, 0), 2000, 'large'))
+                    continue
+                
+                if event.key == pygame.K_ESCAPE and not game_over and not win:
+                    pause_menu.toggle()
+                    paused = pause_menu.active
+                
+                if paused:
+                    action = pause_menu.handle_input(event)
+                    if action == 'Resume':
+                        pause_menu.toggle()
+                        paused = False
+                    elif action == 'Restart':
+                        quick_restart()
+                        paused = False
+                        pause_menu.active = False
+                    elif action == 'Quit':
+                        running = False
+                
+                if (game_over or win) and event.key == pygame.K_r:
+                    reset_game()
+                    game_started = False # Back to welcome screen
+                
+                if event.key == pygame.K_SPACE and not game_over and not win and not paused and game_started:
+                    if player.activate_ultimate():
+                        notifications.append(Notification("FEEDING FRENZY!", (255, 215, 0), 2000, 'large'))
 
-    # Show welcome screen
-    if welcome_screen.active:
-        welcome_screen.update()
+        # Draw Welcome Screen
+        if welcome_screen.active:
+            welcome_screen.update()
+            screen.fill((0, 105, 148))
+            welcome_screen.draw(screen)
+            pygame.display.flip()
+            continue
+
+        # Draw Pause Menu
+        if paused:
+            pause_menu.draw(screen)
+            pygame.display.flip()
+            continue
+
+        # Process Camera
+        success, image = cap.read()
+        if not success: continue
+
+        image = cv2.flip(image, 1)
+        debug_image = image.copy()
+        image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        results = face_mesh.process(image_rgb)
+
+        player_x, player_y = player.rect.centerx, player.rect.centery
+        is_eating = False
+
+        if results.multi_face_landmarks:
+            face_landmarks = results.multi_face_landmarks[0].landmark
+            nose_tip = face_landmarks[1]
+            
+            percent_x = (nose_tip.x - TRACKING_X_MIN) / (TRACKING_X_MAX - TRACKING_X_MIN)
+            percent_y = (nose_tip.y - TRACKING_Y_MIN) / (TRACKING_Y_MAX - TRACKING_Y_MIN)
+
+            percent_x = max(0.0, min(1.0, percent_x))
+            percent_y = max(0.0, min(1.0, percent_y))
+
+            player_x = int(percent_x * SCREEN_WIDTH)
+            player_y = int(percent_y * SCREEN_HEIGHT)
+
+            lip_top = face_landmarks[13]
+            lip_bottom = face_landmarks[14]
+            lip_distance = abs(lip_top.y - lip_bottom.y)
+            if lip_distance > MOUTH_OPEN_THRESHOLD:
+                is_eating = True
+
+            mp.solutions.drawing_utils.draw_landmarks(
+                image=debug_image,
+                landmark_list=results.multi_face_landmarks[0],
+                connections=mp_face_mesh.FACEMESH_CONTOURS,
+                landmark_drawing_spec=None,
+                connection_drawing_spec=mp.solutions.drawing_styles.get_default_face_mesh_contours_style()
+            )
+
+        cv2.imshow("CV Tracking Feed (Tekan 'q' untuk Keluar)", debug_image)
+
+        if not game_started:
+            continue
+
+        # Game Logic
+        if not game_over and not win:
+            player.update(player_x, player_y, is_eating)
+            bot_fish_group.update(player.level, player.rect, player.frozen_enemies)
+            particle_group.update()
+            powerup_group.update()
+            
+            # Magnet Logic
+            if player.magnet_radius > 0:
+                for bot in bot_fish_group:
+                    if bot.level < player.level:
+                        distance = math.hypot(bot.rect.centerx - player.rect.centerx, 
+                                            bot.rect.centery - player.rect.centery)
+                        if distance < player.magnet_radius:
+                            dx = player.rect.centerx - bot.rect.centerx
+                            dy = player.rect.centery - bot.rect.centery
+                            bot.rect.x += dx * 0.05
+                            bot.rect.y += dy * 0.05
+            
+            # Tutorial Logic
+            if player.score > 20 and 1 not in tutorial.shown_tips:
+                tutorial.current_tip = 2
+                tutorial.show_next_tip()
+            if player.combo_count >= 3 and 5 not in tutorial.shown_tips:
+                tutorial.current_tip = 6
+                tutorial.show_next_tip()
+
+            # Spawning Logic
+            current_time = pygame.time.get_ticks()
+            if len(bot_fish_group) < MAX_TOTAL_BOTS:
+                if current_time - last_spawn_time > SPAWN_INTERVAL_GENERAL:
+                    num_to_spawn = random.randint(1, 3)
+                    for _ in range(num_to_spawn):
+                        spawn_level = get_random_spawn_level(player.level)
+                        bot = BotFish(level=spawn_level)
+                        all_sprites.add(bot)
+                        bot_fish_group.add(bot)
+                    last_spawn_time = current_time
+            
+            # Powerup Spawning
+            if current_time - last_powerup_spawn > 5000:
+                if random.random() < POWER_UP_SPAWN_CHANCE * 100:
+                    power_type = random.choice(['speed', 'shield', 'magnet', 'double_xp', 'freeze', 'size_boost'])
+                    x = random.randint(100, SCREEN_WIDTH - 100)
+                    y = random.randint(100, SCREEN_HEIGHT - 100)
+                    powerup = PowerUp(x, y, power_type)
+                    powerup_group.add(powerup)
+                last_powerup_spawn = current_time
+            
+            # Collisions
+            # Player vs Bots
+            collisions = pygame.sprite.spritecollide(player, bot_fish_group, False)
+            for fish in collisions:
+                if player.is_eating and (player.level >= fish.level or player.ultimate_active):
+                    player.add_score(fish.level)
+                    player.fish_eaten += 1
+                    player.add_combo()
+                    player.charge_ultimate(10)
+                    
+                    # Create Particles
+                    # Need helper func for particles or just instantiate direct?
+                    # Helper was cleaner. Let's recreate it inline or add to utils?
+                    # Inline for now as it's simple
+                    for _ in range(8):
+                         angle = random.uniform(0, 2 * math.pi)
+                         speed = random.uniform(2, 5)
+                         velocity = (math.cos(angle) * speed, math.sin(angle) * speed)
+                         color = random.choice([(255, 255, 100), (255, 200, 50), (255, 150, 0)])
+                         p = Particle(fish.rect.centerx, fish.rect.centery, color, velocity, 500, 4, 'circle')
+                         particle_group.add(p)
+                         
+                    fish.kill()
+                    assets.play_sound('eat', 0.5)
+                elif player.level < fish.level and not player.ultimate_active:
+                    is_dead = player.take_damage()
+                    screen_shake_intensity = 15
+                    
+                    # Hit Particles
+                    for _ in range(12):
+                        angle = random.uniform(0, 2 * math.pi)
+                        speed = random.uniform(3, 6)
+                        velocity = (math.cos(angle) * speed, math.sin(angle) * speed)
+                        p = Particle(player.rect.centerx, player.rect.centery, (255, 0, 0), velocity, 700, 5, 'circle')
+                        particle_group.add(p)
+                        
+                    if is_dead:
+                        game_over = True
+                        assets.play_sound('game_over', 0.8)
+
+            # Player vs Powerups
+            powerup_collisions = pygame.sprite.spritecollide(player, powerup_group, True)
+            for powerup in powerup_collisions:
+                player.activate_powerup(powerup.power_type)
+                notifications.append(Notification(f"{powerup.power_type.upper()} Activated!", (255, 255, 0), 1500))
+            
+            # Win Check
+            if player.score >= TOTAL_SCORE_TO_WIN and not win:
+                win = True
+                player.level = MAX_LEVEL
+                assets.play_sound('victory', 0.8)
+
+        # Update Notifications & Background
+        notifications = [n for n in notifications if n.update()]
+        for layer in bg_layers:
+            layer.update()
+        
+        if screen_shake_intensity > 0:
+            screen_shake_intensity -= 1
+
+        # ================= Render =================
         screen.fill((0, 105, 148))
-        welcome_screen.draw(screen)
-        pygame.display.flip()
-        continue
+        
+        # Background
+        for layer in bg_layers:
+            layer.draw(screen)
+        
+        # Shake Surface
+        shake_offset = (0, 0)
+        if screen_shake_intensity > 0:
+            shake_offset = apply_screen_shake(screen_shake_intensity)
+        
+        game_surface = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
+        game_surface.fill((0, 105, 148)) # Or transparent? Background is already drawn on screen.
+        # Actually, if we want shake to affect bg, we should draw bg on game_surface.
+        # Let's redraw everything on game_surface to shake it all
+        for layer in bg_layers:
+            layer.draw(game_surface)
+            
+        for sprite in all_sprites:
+            game_surface.blit(sprite.image, sprite.rect)
+        
+        for particle in particle_group:
+            game_surface.blit(particle.image, particle.rect)
+            
+        for powerup in powerup_group:
+            game_surface.blit(powerup.image, powerup.rect)
+            
+        player.draw_indicator(game_surface)
+        for bot in bot_fish_group:
+            bot.draw_indicator(game_surface, player.level)
+            
+        screen.blit(game_surface, shake_offset)
+        
+        # UI (No Shake)
+        score_next = player.score_to_next if player.level < MAX_LEVEL else TOTAL_SCORE_TO_WIN
+        score_text = assets.fonts['score'].render(f'Score: {player.score} / {score_next}', True, (255, 255, 255))
+        screen.blit(score_text, (10, 10))
+        
+        level_text = assets.fonts['level'].render(f'Level: {player.level}', True, (255, 255, 255))
+        screen.blit(level_text, (10, 50))
+        
+        player.draw_ui(screen)
+        
+        # Legend
+        legend_y = 10
+        legend_x = SCREEN_WIDTH - 250
+        legend_title = assets.fonts['indicator'].render("Legend:", True, (255, 255, 255))
+        screen.blit(legend_title, (legend_x, legend_y))
+        
+        green_text = assets.fonts['indicator'].render("🟢 = Safe to Eat", True, (0, 255, 0))
+        screen.blit(green_text, (legend_x, legend_y + 35))
+        
+        red_text = assets.fonts['indicator'].render("🔴 = DANGER!", True, (255, 0, 0))
+        screen.blit(red_text, (legend_x, legend_y + 65))
+        
+        for notification in notifications:
+            notification.draw(screen)
+            
+        if tutorial.active:
+            tutorial.draw(screen)
+            
+        # Level Up Notification Check
+        if player.level > PLAYER_START_LEVEL and not hasattr(player, 'last_notified_level'):
+            player.last_notified_level = PLAYER_START_LEVEL
+    
+        if hasattr(player, 'last_notified_level') and player.level > player.last_notified_level:
+            notifications.append(Notification(f"LEVEL {player.level}!", (255, 215, 0), 2000, 'large'))
+            # Level Up Particles
+            for _ in range(20):
+                angle = random.uniform(0, 2 * math.pi)
+                speed = random.uniform(3, 8)
+                velocity = (math.cos(angle) * speed, math.sin(angle) * speed)
+                color = random.choice([(255, 215, 0), (255, 255, 100), (255, 200, 255)])
+                p = Particle(player.rect.centerx, player.rect.centery, color, velocity, 1000, 6, 'star')
+                particle_group.add(p)
+            player.last_notified_level = player.level
 
-    if paused:
-        pause_menu.draw(screen)
-        pygame.display.flip()
-        continue
+        # Game Over / Win Screens
+        if game_over:
+            overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
+            overlay.set_alpha(200)
+            overlay.fill((0, 0, 0))
+            screen.blit(overlay, (0, 0))
+            
+            text = assets.fonts['game_over'].render("GAME OVER", True, (255, 0, 0))
+            text_rect = text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 50))
+            screen.blit(text, text_rect)
+            
+            stats_text = assets.fonts['notification'].render(f"Final Score: {player.score}", True, (255, 255, 255))
+            stats_rect = stats_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 20))
+            screen.blit(stats_text, stats_rect)
+            
+            prompt_text = assets.fonts['score'].render("Tekan 'R' untuk Mulai Lagi", True, (255, 255, 255))
+            prompt_rect = prompt_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 80))
+            screen.blit(prompt_text, prompt_rect)
 
+        if win:
+            overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
+            overlay.set_alpha(200)
+            overlay.fill((0, 0, 0))
+            screen.blit(overlay, (0, 0))
+            
+            text = assets.fonts['win'].render("YOU WIN!", True, (255, 215, 0))
+            text_rect = text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 50))
+            screen.blit(text, text_rect)
+            
+            stats_text = assets.fonts['notification'].render(f"Final Score: {player.score}", True, (255, 255, 255))
+            stats_rect = stats_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 20))
+            screen.blit(stats_text, stats_rect)
+            
+            prompt_text = assets.fonts['score'].render("Tekan 'R' untuk Main Lagi", True, (255, 255, 255))
+            prompt_rect = prompt_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 80))
+            screen.blit(prompt_text, prompt_rect)
+
+        pygame.display.flip()
+
+    # Cleanup
+    save_data.update_stats(player.score, player.fish_eaten, player.level, player.max_combo)
+    cap.release()
+    cv2.destroyAllWindows()
+    pygame.quit()
+
+<<<<<<< HEAD
     # Camera tracking
     success, image = cap.read()
     if not success: continue
@@ -1468,3 +1782,7 @@ save_data.update_stats(player.score, player.fish_eaten, player.level, player.max
 cap.release()
 cv2.destroyAllWindows()
 pygame.quit()
+=======
+if __name__ == "__main__":
+    main()
+>>>>>>> b87a9fd8646a6b19aade318cb25029a8339bbfb0
