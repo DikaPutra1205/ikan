@@ -5,6 +5,8 @@ import math
 import random
 import json
 import os
+import numpy as np
+
 
 # ==================================
 # KONFIGURASI GAME (ENHANCED VERSION)
@@ -113,7 +115,7 @@ AUDIO_FILES = {
 # =====================
 pygame.init()
 pygame.mixer.init()  # Init audio mixer
-screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
+screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.FULLSCREEN)
 pygame.display.set_caption("Feeding Frenzy: Evolution (Enhanced)")
 clock = pygame.time.Clock()
 
@@ -1100,6 +1102,9 @@ while running:
             running = False
         
         if event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_F11:
+             pygame.display.toggle_fullscreen()
+
             # Welcome screen - any key to start
             if welcome_screen.active:
                 welcome_screen.skip()
@@ -1213,7 +1218,12 @@ while running:
             connection_drawing_spec=mp.solutions.drawing_styles.get_default_face_mesh_contours_style()
         )
 
-    cv2.imshow("CV Tracking Feed (Tekan 'q' untuk Keluar)", debug_image)
+        # === FACE CAM TO PYGAME SURFACE ===
+        cam_frame = cv2.cvtColor(debug_image, cv2.COLOR_BGR2RGB)  
+        cam_frame = np.rot90(cam_frame)  # orientasi biar bener  
+        cam_surface = pygame.surfarray.make_surface(cam_frame)
+        cam_surface = pygame.transform.scale(cam_surface, (260, 150))  # ukuran facecam
+
 
     # Only update game if started
     if not game_started:
@@ -1386,6 +1396,15 @@ while running:
     # Draw tutorial
     if tutorial.active:
         tutorial.draw(screen)
+        
+    # === FACE CAM OVERLAY (pojok kanan bawah, SELALU tampil) ===
+    if 'cam_surface' in locals():
+        screen.blit(cam_surface, (SCREEN_WIDTH - 270, SCREEN_HEIGHT - 160))
+
+        # Border
+        pygame.draw.rect(screen, (255, 215, 0),
+            (SCREEN_WIDTH - 270, SCREEN_HEIGHT - 160, 260, 150), 3)
+
     
     # Level up notification
     if player.level > PLAYER_START_LEVEL and not hasattr(player, 'last_notified_level'):
@@ -1433,6 +1452,14 @@ while running:
         prompt_text = score_font.render("Tekan 'R' untuk Main Lagi", True, (255, 255, 255))
         prompt_rect = prompt_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 80))
         screen.blit(prompt_text, prompt_rect)
+        
+        # === FACE CAM OVERLAY (pojok kanan bawah) ===
+        screen.blit(cam_surface, (SCREEN_WIDTH - 270, SCREEN_HEIGHT - 160))
+
+        # Border biar rapi
+        pygame.draw.rect(screen, (255, 215, 0),
+            (SCREEN_WIDTH - 270, SCREEN_HEIGHT - 160, 260, 150), 3)
+
 
     pygame.display.flip()
 
