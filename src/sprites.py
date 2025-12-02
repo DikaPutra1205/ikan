@@ -214,11 +214,6 @@ class Player(pygame.sprite.Sprite):
         self.rect = self.image.get_rect(center=center)
 
     def update(self, x, y, eating):
-        clock = pygame.time.Clock() # Warning: Instantiating Clock here is wrong, need delta time passed in update.
-        # FIX: We should pass dt (delta time) to update, but for now use get_ticks diff or hardcoded.
-        # The original code used clock.get_time() inside update which relies on global clock.
-        # Better approach: Pass dt or just use get_ticks() for timers.
-        
         current_time = pygame.time.get_ticks()
         
         # Movement with speed multiplier

@@ -104,8 +104,8 @@ def get_random_spawn_level(player_level):
             for lvl in predator_levels: weights[lvl] = 0.2 / len(predator_levels)
 
     # Ensure the weight for player's exact level is 0 (avoid spawning same size if desired, or keep it low)
-    if player_level <= MAX_LEVEL:
-        weights[player_level - 1] = 0.0
+    # if player_level <= MAX_LEVEL:
+    #     weights[player_level - 1] = 0.0
 
     if sum(weights) == 0:
         return 1

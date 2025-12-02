@@ -1,14 +1,8 @@
 {
-    "high_score": 332,
-<<<<<<< HEAD
-    "total_fish_eaten": 343,
+    "high_score": 241,
+    "total_fish_eaten": 173,
     "total_playtime": 0,
-    "games_played": 13,
-=======
-    "total_fish_eaten": 301,
-    "total_playtime": 0,
-    "games_played": 10,
->>>>>>> b87a9fd8646a6b19aade318cb25029a8339bbfb0
+    "games_played": 6,
     "max_level_reached": 6,
-    "max_combo": 89
+    "max_combo": 37
 }
