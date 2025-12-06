@@ -71,18 +71,44 @@ class PauseMenu:
     def __init__(self):
         self.active = False
         self.selected = 0
-        self.options = ['Resume', 'Restart', 'Quit']
+        self.options = ['Resume', 'Stats', 'Restart', 'Quit']
+        self.show_stats = False
+        self.stats_data = None
         
     def toggle(self):
         self.active = not self.active
+        self.show_stats = False
+    
+    def set_stats(self, player, game_stats, save_data):
+        self.stats_data = {
+            'current_score': player.score,
+            'current_level': player.level,
+            'fish_eaten': player.fish_eaten,
+            'max_combo': player.max_combo,
+            'health': player.health,
+            'damage_taken': game_stats.get('damage_taken', 0),
+            'bosses_defeated': game_stats.get('bosses_defeated', 0),
+            'powerups': len(game_stats.get('powerups_collected', set())),
+            'high_score': save_data.data.get('high_score', 0),
+            'total_fish': save_data.data.get('total_fish_eaten', 0),
+            'games_played': save_data.data.get('games_played', 0),
+        }
     
     def handle_input(self, event):
         if event.type == pygame.KEYDOWN:
+            if self.show_stats:
+                if event.key in [pygame.K_ESCAPE, pygame.K_RETURN, pygame.K_BACKSPACE]:
+                    self.show_stats = False
+                return None
+            
             if event.key == pygame.K_UP:
                 self.selected = (self.selected - 1) % len(self.options)
             elif event.key == pygame.K_DOWN:
                 self.selected = (self.selected + 1) % len(self.options)
             elif event.key == pygame.K_RETURN:
+                if self.options[self.selected] == 'Stats':
+                    self.show_stats = True
+                    return None
                 return self.options[self.selected]
         return None
     
@@ -93,17 +119,76 @@ class PauseMenu:
         overlay.fill((0, 0, 0))
         surface.blit(overlay, (0, 0))
         
+        if self.show_stats and self.stats_data:
+            self._draw_stats(surface)
+            return
+        
         # Title
         title = assets.fonts['game_over'].render("PAUSED", True, (255, 255, 255))
-        title_rect = title.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 100))
+        title_rect = title.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 150))
         surface.blit(title, title_rect)
         
         # Options
         for i, option in enumerate(self.options):
             color = (255, 255, 0) if i == self.selected else (255, 255, 255)
             text = assets.fonts['notification'].render(option, True, color)
-            text_rect = text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + i * 60))
+            text_rect = text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 50 + i * 60))
             surface.blit(text, text_rect)
+    
+    def _draw_stats(self, surface):
+        # Stats Dashboard
+        title = assets.fonts['game_over'].render("STATISTICS", True, (255, 215, 0))
+        title_rect = title.get_rect(center=(SCREEN_WIDTH // 2, 80))
+        surface.blit(title, title_rect)
+        
+        if not self.stats_data:
+            return
+        
+        # Create two columns
+        left_x = SCREEN_WIDTH // 2 - 250
+        right_x = SCREEN_WIDTH // 2 + 50
+        y_start = 160
+        line_height = 40
+        
+        font = pygame.font.Font(None, 32)
+        
+        # Current Game Stats (Left Column)
+        header_left = font.render("📊 Current Game", True, (0, 255, 255))
+        surface.blit(header_left, (left_x, y_start))
+        
+        current_stats = [
+            (f"Score: {self.stats_data['current_score']}", (255, 255, 255)),
+            (f"Level: {self.stats_data['current_level']}", (255, 255, 255)),
+            (f"Fish Eaten: {self.stats_data['fish_eaten']}", (100, 255, 100)),
+            (f"Max Combo: {self.stats_data['max_combo']}x", (255, 200, 100)),
+            (f"Health: {'❤️' * self.stats_data['health']}", (255, 100, 100)),
+            (f"Damage Taken: {self.stats_data['damage_taken']}", (255, 150, 150)),
+            (f"Bosses Defeated: {self.stats_data['bosses_defeated']}", (255, 215, 0)),
+            (f"Power-ups: {self.stats_data['powerups']}/6", (200, 100, 255)),
+        ]
+        
+        for i, (text, color) in enumerate(current_stats):
+            stat_text = font.render(text, True, color)
+            surface.blit(stat_text, (left_x, y_start + 50 + i * line_height))
+        
+        # All-time Stats (Right Column)
+        header_right = font.render("🏆 All-Time", True, (255, 215, 0))
+        surface.blit(header_right, (right_x, y_start))
+        
+        alltime_stats = [
+            (f"High Score: {self.stats_data['high_score']}", (255, 255, 100)),
+            (f"Total Fish: {self.stats_data['total_fish']}", (100, 255, 100)),
+            (f"Games Played: {self.stats_data['games_played']}", (200, 200, 255)),
+        ]
+        
+        for i, (text, color) in enumerate(alltime_stats):
+            stat_text = font.render(text, True, color)
+            surface.blit(stat_text, (right_x, y_start + 50 + i * line_height))
+        
+        # Back instruction
+        back_text = font.render("Press ESC or ENTER to go back", True, (150, 150, 150))
+        back_rect = back_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT - 50))
+        surface.blit(back_text, back_rect)
 
 class WelcomeScreen:
     def __init__(self):

@@ -7,8 +7,10 @@ import random
 
 from src.config import *
 from src.assets import assets
-from src.sprites import Player, BotFish, Particle, PowerUp
-from src.utils import SaveData, BackgroundLayer, get_random_spawn_level, apply_screen_shake
+from src.sprites import Player, BotFish, BossFish, Particle, PowerUp, TrailParticle
+from src.utils import (SaveData, BackgroundLayer, LightRay, AchievementManager, 
+                       get_random_spawn_level, apply_screen_shake, ScorePopup, 
+                       Bubble, WaterCurrent, VignetteEffect, DailyChallengeManager)
 from src.ui import PauseMenu, WelcomeScreen, Tutorial, Notification, draw_progress_bar
 
 # =====================
@@ -66,6 +68,46 @@ def main():
         BackgroundLayer(0, 0.3, (60, 100, 140), 'seaweed')
     ]
     
+    # Light rays for underwater effect
+    light_rays = [LightRay() for _ in range(5)]
+    
+    # Bubbles for atmosphere
+    bubbles = [Bubble() for _ in range(30)]
+    
+    # Water current effect
+    water_current = WaterCurrent()
+    
+    # Vignette effect
+    vignette = VignetteEffect()
+    
+    # Score popups
+    score_popups = []
+    
+    # Daily challenge
+    daily_challenge = DailyChallengeManager()
+    
+    # Trail particles group
+    trail_group = pygame.sprite.Group()
+    
+    # Boss system
+    boss_group = pygame.sprite.Group()
+    current_boss = None
+    boss_defeated_levels = set()
+    
+    # Achievement system
+    achievement_manager = AchievementManager()
+    game_stats = {
+        'damage_taken': 0,
+        'fish_in_10s': 0,
+        'fish_timestamps': [],
+        'ultimates_used': 0,
+        'powerups_collected': set(),
+        'bosses_defeated': 0,
+        'survival_time': 0,
+        'game_start_time': pygame.time.get_ticks(),
+        'last_damage_time': pygame.time.get_ticks()
+    }
+    
     save_data = SaveData()
     pause_menu = PauseMenu()
     welcome_screen = WelcomeScreen()
@@ -74,6 +116,9 @@ def main():
     
     last_spawn_time = pygame.time.get_ticks()
     last_powerup_spawn = pygame.time.get_ticks()
+    frame_count = 0  # For face detection optimization
+    last_face_x, last_face_y = SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2
+    last_is_eating = False
     
     running = True
     game_over = False
@@ -84,26 +129,42 @@ def main():
 
     def reset_game():
         nonlocal game_over, win, paused, game_started, player, last_spawn_time, notifications, tutorial, welcome_screen
+        nonlocal current_boss, boss_defeated_levels, game_stats, trail_group, score_popups
         save_data.update_stats(player.score, player.fish_eaten, player.level, player.max_combo)
         game_over = False
         win = False
-        # paused = False # Don't reset paused state if coming from menu, handle outside
-        # game_started stays False if full reset, or True if just restart level?
-        # Let's assume full restart goes back to welcome or just gameplay
         all_sprites.empty()
         bot_fish_group.empty()
         particle_group.empty()
         powerup_group.empty()
+        boss_group.empty()
+        trail_group.empty()
+        score_popups = []
+        
+        current_boss = None
+        boss_defeated_levels = set()
+        game_stats = {
+            'damage_taken': 0,
+            'fish_in_10s': 0,
+            'fish_timestamps': [],
+            'ultimates_used': 0,
+            'powerups_collected': set(),
+            'bosses_defeated': 0,
+            'survival_time': 0,
+            'game_start_time': pygame.time.get_ticks(),
+            'last_damage_time': pygame.time.get_ticks()
+        }
         
         player = Player()
         all_sprites.add(player)
         last_spawn_time = pygame.time.get_ticks()
         notifications = []
         tutorial = Tutorial()
-        welcome_screen = WelcomeScreen() # Show welcome again on full restart
+        welcome_screen = WelcomeScreen()
 
     def quick_restart():
         nonlocal game_over, win, paused, player, last_spawn_time, notifications, tutorial
+        nonlocal current_boss, boss_defeated_levels, game_stats, trail_group, score_popups
         save_data.update_stats(player.score, player.fish_eaten, player.level, player.max_combo)
         game_over = False
         win = False
@@ -111,6 +172,23 @@ def main():
         bot_fish_group.empty()
         particle_group.empty()
         powerup_group.empty()
+        boss_group.empty()
+        trail_group.empty()
+        score_popups = []
+        
+        current_boss = None
+        boss_defeated_levels = set()
+        game_stats = {
+            'damage_taken': 0,
+            'fish_in_10s': 0,
+            'fish_timestamps': [],
+            'ultimates_used': 0,
+            'powerups_collected': set(),
+            'bosses_defeated': 0,
+            'survival_time': 0,
+            'game_start_time': pygame.time.get_ticks(),
+            'last_damage_time': pygame.time.get_ticks()
+        }
         
         player = Player()
         all_sprites.add(player)
@@ -134,10 +212,6 @@ def main():
                     tutorial.show_next_tip()
                     continue
                 
-                if event.key == pygame.K_ESCAPE and not game_over and not win:
-                    pause_menu.toggle()
-                    paused = pause_menu.active
-                
                 if paused:
                     action = pause_menu.handle_input(event)
                     if action == 'Resume':
@@ -150,6 +224,12 @@ def main():
                     elif action == 'Quit':
                         running = False
                 
+                if event.key == pygame.K_ESCAPE and not game_over and not win:
+                    pause_menu.toggle()
+                    paused = pause_menu.active
+                    if paused:
+                        pause_menu.set_stats(player, game_stats, save_data)
+                
                 if (game_over or win) and event.key == pygame.K_r:
                     reset_game()
                     game_started = False # Back to welcome screen
@@ -157,6 +237,7 @@ def main():
                 if event.key == pygame.K_SPACE and not game_over and not win and not paused and game_started:
                     if player.activate_ultimate():
                         notifications.append(Notification("FEEDING FRENZY!", (255, 215, 0), 2000, 'large'))
+                        game_stats['ultimates_used'] += 1
                 
                 if event.key == pygame.K_F11:
                     pygame.display.toggle_fullscreen()
@@ -175,44 +256,49 @@ def main():
             pygame.display.flip()
             continue
 
-        # Process Camera
+        # Process Camera (optimized - skip frames)
         success, image = cap.read()
         if not success: continue
 
         image = cv2.flip(image, 1)
         debug_image = image.copy()
-        image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-        results = face_mesh.process(image_rgb)
+        
+        frame_count += 1
+        player_x, player_y = last_face_x, last_face_y
+        is_eating = last_is_eating
+        
+        # Only process face detection every N frames for better performance
+        if frame_count % FACE_DETECTION_SKIP_FRAMES == 0:
+            image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+            results = face_mesh.process(image_rgb)
 
-        player_x, player_y = player.rect.centerx, player.rect.centery
-        is_eating = False
+            if results.multi_face_landmarks:
+                face_landmarks = results.multi_face_landmarks[0].landmark
+                nose_tip = face_landmarks[1]
+                
+                percent_x = (nose_tip.x - TRACKING_X_MIN) / (TRACKING_X_MAX - TRACKING_X_MIN)
+                percent_y = (nose_tip.y - TRACKING_Y_MIN) / (TRACKING_Y_MAX - TRACKING_Y_MIN)
 
-        if results.multi_face_landmarks:
-            face_landmarks = results.multi_face_landmarks[0].landmark
-            nose_tip = face_landmarks[1]
-            
-            percent_x = (nose_tip.x - TRACKING_X_MIN) / (TRACKING_X_MAX - TRACKING_X_MIN)
-            percent_y = (nose_tip.y - TRACKING_Y_MIN) / (TRACKING_Y_MAX - TRACKING_Y_MIN)
+                percent_x = max(0.0, min(1.0, percent_x))
+                percent_y = max(0.0, min(1.0, percent_y))
 
-            percent_x = max(0.0, min(1.0, percent_x))
-            percent_y = max(0.0, min(1.0, percent_y))
+                player_x = int(percent_x * SCREEN_WIDTH)
+                player_y = int(percent_y * SCREEN_HEIGHT)
+                last_face_x, last_face_y = player_x, player_y
 
-            player_x = int(percent_x * SCREEN_WIDTH)
-            player_y = int(percent_y * SCREEN_HEIGHT)
+                lip_top = face_landmarks[13]
+                lip_bottom = face_landmarks[14]
+                lip_distance = abs(lip_top.y - lip_bottom.y)
+                is_eating = lip_distance > MOUTH_OPEN_THRESHOLD
+                last_is_eating = is_eating
 
-            lip_top = face_landmarks[13]
-            lip_bottom = face_landmarks[14]
-            lip_distance = abs(lip_top.y - lip_bottom.y)
-            if lip_distance > MOUTH_OPEN_THRESHOLD:
-                is_eating = True
-
-            mp.solutions.drawing_utils.draw_landmarks(
-                image=debug_image,
-                landmark_list=results.multi_face_landmarks[0],
-                connections=mp_face_mesh.FACEMESH_CONTOURS,
-                landmark_drawing_spec=None,
-                connection_drawing_spec=mp.solutions.drawing_styles.get_default_face_mesh_contours_style()
-            )
+                mp.solutions.drawing_utils.draw_landmarks(
+                    image=debug_image,
+                    landmark_list=results.multi_face_landmarks[0],
+                    connections=mp_face_mesh.FACEMESH_CONTOURS,
+                    landmark_drawing_spec=None,
+                    connection_drawing_spec=mp.solutions.drawing_styles.get_default_face_mesh_contours_style()
+                )
         
         # === FACE CAM TO PYGAME SURFACE ===
         # Prepare camera frame for display in Pygame
@@ -228,10 +314,83 @@ def main():
 
         # Game Logic
         if not game_over and not win:
+            # Update survival time for daily challenge
+            current_time = pygame.time.get_ticks()
+            if game_stats.get('game_start_time'):
+                time_since_damage = (current_time - game_stats.get('last_damage_time', current_time)) / 1000
+                game_stats['survival_time'] = int(time_since_damage)
+            
+            # Update water current
+            water_current.update()
+            
+            # Create trail particles for player movement
+            if random.random() < 0.3:
+                trail = TrailParticle(player.rect.centerx, player.rect.centery, 
+                                     int(player.current_size * 0.3))
+                trail_group.add(trail)
+            
             player.update(player_x, player_y, is_eating)
+            
+            # Apply water current to player
+            water_current.apply_to_rect(player.rect)
+            
             bot_fish_group.update(player.level, player.rect, player.frozen_enemies)
+            
+            # Apply water current to bot fish
+            for bot in bot_fish_group:
+                water_current.apply_to_rect(bot.rect)
+            
             particle_group.update()
             powerup_group.update()
+            trail_group.update()
+            
+            # Update score popups
+            score_popups = [p for p in score_popups if p.update()]
+            
+            # Update daily challenge progress
+            reward = daily_challenge.update_progress('combo', player.combo_count)
+            if reward > 0:
+                player.add_score(reward)
+                notifications.append(Notification(f"🎁 Daily Complete! +{reward}", (0, 255, 100), 3000, 'large'))
+            
+            # Boss Logic
+            if current_boss:
+                current_boss.update(player.rect)
+                if current_boss.defeated:
+                    # Boss defeated rewards
+                    player.add_score(current_boss.boss_level * 20)
+                    game_stats['bosses_defeated'] += 1
+                    notifications.append(Notification("BOSS DEFEATED!", (255, 215, 0), 3000, 'large'))
+                    
+                    # Spawn particles
+                    for _ in range(30):
+                        angle = random.uniform(0, 2 * math.pi)
+                        speed = random.uniform(3, 8)
+                        velocity = (math.cos(angle) * speed, math.sin(angle) * speed)
+                        color = random.choice([(255, 215, 0), (255, 100, 100), (255, 255, 100)])
+                        p = Particle(current_boss.rect.centerx, current_boss.rect.centery, 
+                                   color, velocity, 1500, 8, 'star')
+                        particle_group.add(p)
+                    
+                    boss_group.remove(current_boss)
+                    current_boss = None
+                    
+                    # Update daily challenge
+                    daily_challenge.update_progress('boss_defeated', game_stats['bosses_defeated'])
+                    
+                    # Achievement check
+                    if game_stats['bosses_defeated'] == 1:
+                        achievement_manager.unlock('boss_slayer')
+            
+            # Check for boss spawn
+            for boss_level in BOSS_SPAWN_LEVELS:
+                if player.level >= boss_level and boss_level not in boss_defeated_levels and current_boss is None:
+                    current_boss = BossFish(boss_level)
+                    boss_group.add(current_boss)
+                    boss_defeated_levels.add(boss_level)
+                    notifications.append(Notification("⚠️ BOSS INCOMING! ⚠️", (255, 0, 0), 3000, 'large'))
+                    assets.play_sound('boss_spawn', 0.9)
+                    break
             
             # Magnet Logic
             if player.magnet_radius > 0:
@@ -285,6 +444,28 @@ def main():
                     player.add_combo()
                     player.charge_ultimate(10)
                     
+                    # Track fish eaten timestamps for speed demon achievement
+                    current_time = pygame.time.get_ticks()
+                    game_stats['fish_timestamps'].append(current_time)
+                    # Keep only last 10 seconds of timestamps
+                    game_stats['fish_timestamps'] = [t for t in game_stats['fish_timestamps'] 
+                                                      if current_time - t < 10000]
+                    game_stats['fish_in_10s'] = len(game_stats['fish_timestamps'])
+                    
+                    # Update daily challenge
+                    daily_challenge.update_progress('fish_eaten', game_stats['fish_in_10s'])
+                    
+                    # Create Score Popup
+                    score_value = fish.level * (2 if player.double_xp else 1)
+                    if player.combo_count >= 10:
+                        score_value *= 3
+                    elif player.combo_count >= 5:
+                        score_value *= 2
+                    elif player.combo_count >= 3:
+                        score_value = int(score_value * 1.5)
+                    popup_color = (255, 215, 0) if player.combo_count >= 5 else (255, 255, 100)
+                    score_popups.append(ScorePopup(fish.rect.centerx, fish.rect.centery - 20, score_value, popup_color))
+                    
                     # Create Eat Particles
                     for _ in range(8):
                          angle = random.uniform(0, 2 * math.pi)
@@ -299,6 +480,8 @@ def main():
                 elif player.level < fish.level and not player.ultimate_active:
                     is_dead = player.take_damage()
                     screen_shake_intensity = 15
+                    game_stats['damage_taken'] += 1
+                    game_stats['last_damage_time'] = pygame.time.get_ticks()  # Reset survival timer
                     
                     # Hit Particles
                     for _ in range(12):
@@ -311,13 +494,36 @@ def main():
                     if is_dead:
                         game_over = True
                         assets.play_sound('game_over', 0.8)
+            
+            # Player vs Boss
+            if current_boss and pygame.sprite.collide_rect(player, current_boss):
+                if player.is_eating and player.ultimate_active:
+                    current_boss.take_damage()
+                    screen_shake_intensity = 10
+                elif not player.invincible:
+                    is_dead = player.take_damage()
+                    screen_shake_intensity = 20
+                    game_stats['damage_taken'] += 1
+                    if is_dead:
+                        game_over = True
+                        assets.play_sound('game_over', 0.8)
 
             # Player vs Powerups
             powerup_collisions = pygame.sprite.spritecollide(player, powerup_group, True)
             for powerup in powerup_collisions:
                 player.activate_powerup(powerup.power_type)
+                game_stats['powerups_collected'].add(powerup.power_type)
                 notifications.append(Notification(f"{powerup.power_type.upper()} Activated!", (255, 255, 0), 1500))
                 assets.play_sound('power_up_collect', 0.7)
+                
+                # Update daily challenge
+                daily_challenge.update_progress('powerups', len(game_stats['powerups_collected']))
+            
+            # Update daily challenge for survival time
+            daily_challenge.update_progress('survival_time', game_stats['survival_time'])
+            
+            # Check achievements
+            achievement_manager.check_achievements(player, game_stats)
             
             # Win Check
             if player.score >= TOTAL_SCORE_TO_WIN and not win:
@@ -330,11 +536,30 @@ def main():
         for layer in bg_layers:
             layer.update()
         
+        # Update light rays
+        for ray in light_rays:
+            ray.update()
+        
+        # Update bubbles
+        for bubble in bubbles:
+            bubble.update()
+        
         if screen_shake_intensity > 0:
             screen_shake_intensity -= 1
 
         # ================= Render =================
         screen.fill((0, 105, 148))
+        
+        # Light rays (behind everything)
+        for ray in light_rays:
+            ray.draw(screen)
+        
+        # Bubbles (background layer)
+        for bubble in bubbles:
+            bubble.draw(screen)
+        
+        # Water current visualization
+        water_current.draw(screen)
         
         # Background
         for layer in bg_layers:
@@ -351,6 +576,10 @@ def main():
         # Redrawing bg on game_surface
         for layer in bg_layers:
             layer.draw(game_surface)
+        
+        # Draw trail particles (behind player)
+        for trail in trail_group:
+            game_surface.blit(trail.image, trail.rect)
             
         for sprite in all_sprites:
             game_surface.blit(sprite.image, sprite.rect)
@@ -360,12 +589,30 @@ def main():
             
         for powerup in powerup_group:
             game_surface.blit(powerup.image, powerup.rect)
+        
+        # Draw boss
+        for boss in boss_group:
+            game_surface.blit(boss.image, boss.rect)
             
         player.draw_indicator(game_surface)
         for bot in bot_fish_group:
             bot.draw_indicator(game_surface, player.level)
             
         screen.blit(game_surface, shake_offset)
+        
+        # Draw score popups
+        for popup in score_popups:
+            popup.draw(screen)
+        
+        # Vignette effect (on top of game, before UI)
+        vignette.draw(screen)
+        
+        # Boss health bar (no shake)
+        if current_boss:
+            current_boss.draw_health_bar(screen)
+        
+        # Daily Challenge UI
+        daily_challenge.draw(screen, y_offset=100)
         
         # UI (No Shake)
         score_next = player.score_to_next if player.level < MAX_LEVEL else TOTAL_SCORE_TO_WIN
@@ -391,6 +638,9 @@ def main():
         
         for notification in notifications:
             notification.draw(screen)
+        
+        # Draw achievement notifications
+        achievement_manager.draw_notifications(screen)
             
         if tutorial.active:
             tutorial.draw(screen)

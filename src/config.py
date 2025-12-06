@@ -4,7 +4,10 @@ import os
 # KONFIGURASI DISPLAY & GAMEPLAY
 # ==================================
 SCREEN_WIDTH, SCREEN_HEIGHT = 1280, 720
-FPS = 30
+FPS = 60  
+
+
+FACE_DETECTION_SKIP_FRAMES = 2  
 
 # Player Defaults
 PLAYER_START_LEVEL = 2
@@ -58,6 +61,47 @@ ULTIMATE_DURATION = 5000
 COMBO_TIMEOUT = 3000
 COMBO_MULTIPLIERS = {1: 1.0, 3: 1.5, 5: 2.0, 10: 3.0}
 
+# Boss Config
+BOSS_SPAWN_LEVELS = [5, 8, 11, 14]  
+BOSS_HEALTH = {5: 3, 8: 5, 11: 7, 14: 10}  
+BOSS_SIZE_MULTIPLIER = 2.5
+BOSS_SPEED = 1.5
+
+# Achievement 
+ACHIEVEMENTS = {
+    'first_blood': {'name': 'First Blood', 'desc': 'Makan ikan pertama', 'icon': '🩸'},
+    'combo_master': {'name': 'Combo Master', 'desc': 'Raih combo 10x', 'icon': '🔥'},
+    'survivor': {'name': 'Survivor', 'desc': 'Selamat dari 5 serangan', 'icon': '🛡️'},
+    'speed_demon': {'name': 'Speed Demon', 'desc': 'Makan 10 ikan dalam 10 detik', 'icon': '⚡'},
+    'boss_slayer': {'name': 'Boss Slayer', 'desc': 'Kalahkan boss pertama', 'icon': '👑'},
+    'ultimate_user': {'name': 'Ultimate User', 'desc': 'Gunakan ultimate 3 kali', 'icon': '💎'},
+    'collector': {'name': 'Collector', 'desc': 'Kumpulkan semua jenis power-up', 'icon': '🎁'},
+    'apex_predator': {'name': 'Apex Predator', 'desc': 'Mencapai level maksimum', 'icon': '🦈'},
+}
+
+# Fish Behaviors
+FISH_BEHAVIORS = ['normal', 'zigzag', 'flee', 'chase', 'school']
+
+# Daily Challenges
+DAILY_CHALLENGES = {
+    'speed_eater': {'name': 'Speed Eater', 'desc': 'Makan 20 ikan dalam 30 detik', 'target': 20, 'reward': 500},
+    'combo_king': {'name': 'Combo King', 'desc': 'Raih combo 15x', 'target': 15, 'reward': 300},
+    'survivor_pro': {'name': 'Survivor Pro', 'desc': 'Bertahan 3 menit tanpa terkena damage', 'target': 180, 'reward': 400},
+    'boss_rush': {'name': 'Boss Rush', 'desc': 'Kalahkan 2 boss dalam 1 game', 'target': 2, 'reward': 600},
+    'powerup_master': {'name': 'Power-up Master', 'desc': 'Kumpulkan 10 power-up', 'target': 10, 'reward': 250},
+}
+
+# Weather/Environment Effects
+WEATHER_TYPES = ['calm', 'bubbles', 'current', 'deep']
+CURRENT_STRENGTH = 2.0  # pixels per frame when current is active
+
+# Game Modes
+GAME_MODES = {
+    'classic': {'name': 'Classic', 'desc': 'Mode standar - naik level sampai menang'},
+    'survival': {'name': 'Survival', 'desc': 'Bertahan selama mungkin dengan difficulty naik'},
+    'time_attack': {'name': 'Time Attack', 'desc': 'Raih score tertinggi dalam 3 menit'},
+}
+
 # =====================
 # ASSET PATHS
 # =====================
@@ -95,4 +139,12 @@ AUDIO_FILES = {
     'victory': os.path.join(SOUNDS_DIR, 'win.mp3'),
     'bgm_gameplay': os.path.join(SOUNDS_DIR, 'bgm-gameplay.mp3'),
     'bgm_menu': os.path.join(SOUNDS_DIR, 'ibgm-menu.mp3'),
+    # Combo sounds
+    'combo_3': os.path.join(SOUNDS_DIR, 'eat.mp3'),
+    'combo_5': os.path.join(SOUNDS_DIR, 'eat.mp3'),
+    'combo_10': os.path.join(SOUNDS_DIR, 'level-up.mp3'),
+    'boss_spawn': os.path.join(SOUNDS_DIR, 'powerup-ready.mp3'),
+    'boss_hit': os.path.join(SOUNDS_DIR, 'hit.mp3'),
+    'boss_defeated': os.path.join(SOUNDS_DIR, 'win.mp3'),
+    'achievement': os.path.join(SOUNDS_DIR, 'level-up.mp3'),
 }

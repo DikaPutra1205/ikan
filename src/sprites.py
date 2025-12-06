@@ -5,6 +5,28 @@ from .config import *
 from .assets import assets
 from .ui import draw_level_indicator, draw_progress_bar
 
+
+class TrailParticle(pygame.sprite.Sprite):
+    def __init__(self, x, y, size, color=(100, 200, 255)):
+        super().__init__()
+        self.x = x
+        self.y = y
+        self.size = size
+        self.alpha = 150
+        self.image = pygame.Surface((size, size), pygame.SRCALPHA)
+        pygame.draw.circle(self.image, (*color, self.alpha), (size//2, size//2), size//2)
+        self.rect = self.image.get_rect(center=(x, y))
+        self.spawn_time = pygame.time.get_ticks()
+        
+    def update(self):
+        elapsed = pygame.time.get_ticks() - self.spawn_time
+        if elapsed > 300:
+            self.kill()
+            return
+        self.alpha = int(150 * (1 - elapsed / 300))
+        self.image.fill((0, 0, 0, 0))
+        pygame.draw.circle(self.image, (100, 200, 255, self.alpha), (self.size//2, self.size//2), self.size//2)
+
 class Particle(pygame.sprite.Sprite):
     def __init__(self, x, y, color, velocity, lifetime=1000, size=5, particle_type='circle'):
         super().__init__()
@@ -85,9 +107,10 @@ class PowerUp(pygame.sprite.Sprite):
             self.kill()
 
 class BotFish(pygame.sprite.Sprite):
-    def __init__(self, level):
+    def __init__(self, level, behavior='normal'):
         super().__init__()
         self.level = level
+        self.behavior = behavior if behavior != 'normal' else random.choice(FISH_BEHAVIORS)
         
         # Get images from AssetManager
         closed_base = assets.get_fish_image(level, "closed")
@@ -120,6 +143,13 @@ class BotFish(pygame.sprite.Sprite):
         self.animation_interval = random.randint(500, 2000)
         
         self.frozen = False
+        
+        # Behavior variables
+        self.zigzag_phase = random.uniform(0, math.pi * 2)
+        self.zigzag_amplitude = random.randint(30, 60)
+        self.flee_distance = 150
+        self.school_target = None
+        self.original_y = start_y
 
     def update(self, player_level, player_rect, frozen=False):
         # Apply freeze effect
@@ -128,17 +158,51 @@ class BotFish(pygame.sprite.Sprite):
         else:
             self.speed = self.base_speed
         
-        # Movement
+        # Base movement
         self.rect.x += self.speed * self.direction
-
-        # Predator behavior
-        if self.level > player_level and not frozen:
-            distance = math.hypot(self.rect.centerx - player_rect.centerx, self.rect.centery - player_rect.centery)
-            if distance < PREDATOR_THREAT_ZONE:
+        
+        # Behavior-specific movement
+        if self.behavior == 'zigzag':
+            self.zigzag_phase += 0.1
+            self.rect.y = self.original_y + math.sin(self.zigzag_phase) * self.zigzag_amplitude
+            
+        elif self.behavior == 'flee' and self.level < player_level:
+            # Flee from player if we're prey
+            distance = math.hypot(self.rect.centerx - player_rect.centerx, 
+                                 self.rect.centery - player_rect.centery)
+            if distance < self.flee_distance:
+                # Run away!
                 if self.rect.centery < player_rect.centery:
-                    self.rect.y += 1
-                elif self.rect.centery > player_rect.centery:
-                    self.rect.y -= 1
+                    self.rect.y -= 3
+                else:
+                    self.rect.y += 3
+                # Speed boost when fleeing
+                self.rect.x += self.speed * self.direction * 0.5
+                
+        elif self.behavior == 'chase' and self.level > player_level and not frozen:
+            # Actively chase player if we're predator
+            distance = math.hypot(self.rect.centerx - player_rect.centerx, 
+                                 self.rect.centery - player_rect.centery)
+            if distance < PREDATOR_THREAT_ZONE * 1.5:
+                dx = player_rect.centerx - self.rect.centerx
+                dy = player_rect.centery - self.rect.centery
+                dist = max(1, math.hypot(dx, dy))
+                self.rect.x += (dx / dist) * 2
+                self.rect.y += (dy / dist) * 2
+
+        # Original Predator behavior (for normal behavior type)
+        elif self.behavior == 'normal':
+            if self.level > player_level and not frozen:
+                distance = math.hypot(self.rect.centerx - player_rect.centerx, 
+                                     self.rect.centery - player_rect.centery)
+                if distance < PREDATOR_THREAT_ZONE:
+                    if self.rect.centery < player_rect.centery:
+                        self.rect.y += 1
+                    elif self.rect.centery > player_rect.centery:
+                        self.rect.y -= 1
+        
+        # Keep in bounds (Y axis)
+        self.rect.y = max(30, min(SCREEN_HEIGHT - 30, self.rect.y))
 
         # Animation
         current_time = pygame.time.get_ticks()
@@ -159,6 +223,129 @@ class BotFish(pygame.sprite.Sprite):
     def draw_indicator(self, surface, player_level):
         draw_level_indicator(surface, self.level, self.rect.centerx, self.rect.centery, 
                            is_player=False, player_level=player_level)
+
+
+# Boss Fish Class
+class BossFish(pygame.sprite.Sprite):
+    def __init__(self, boss_level):
+        super().__init__()
+        self.level = min(boss_level + 2, MAX_LEVEL)
+        self.boss_level = boss_level
+        self.health = BOSS_HEALTH.get(boss_level, 5)
+        self.max_health = self.health
+        
+        # Get images
+        closed_base = assets.get_fish_image(self.level, "closed")
+        open_base = assets.get_fish_image(self.level, "open")
+        
+        base_scale = FISH_BASE_SIZES[self.level] * BOSS_SIZE_MULTIPLIER
+        size = (int(base_scale), int(base_scale))
+        
+        self.closed_image = pygame.transform.scale(closed_base, size)
+        self.open_image = pygame.transform.scale(open_base, size)
+        
+        # Tint boss red
+        self.closed_image.fill((255, 100, 100), special_flags=pygame.BLEND_MULT)
+        self.open_image.fill((255, 100, 100), special_flags=pygame.BLEND_MULT)
+        
+        self.direction = random.choice([-1, 1])
+        if self.direction == -1:
+            self.closed_image = pygame.transform.flip(self.closed_image, True, False)
+            self.open_image = pygame.transform.flip(self.open_image, True, False)
+        
+        self.image = self.closed_image
+        
+        start_x = -size[0] if self.direction == 1 else SCREEN_WIDTH + size[0]
+        start_y = SCREEN_HEIGHT // 2
+        self.rect = self.image.get_rect(center=(start_x, start_y))
+        
+        self.speed = BOSS_SPEED
+        self.phase = 0
+        self.attack_pattern = 'chase'
+        self.pattern_timer = pygame.time.get_ticks()
+        self.invincible = False
+        self.invincible_timer = 0
+        self.defeated = False
+        
+    def update(self, player_rect):
+        current_time = pygame.time.get_ticks()
+        
+        # Change attack pattern every 3 seconds
+        if current_time - self.pattern_timer > 3000:
+            self.attack_pattern = random.choice(['chase', 'sweep', 'charge'])
+            self.pattern_timer = current_time
+        
+        # Update invincibility
+        if self.invincible:
+            if current_time > self.invincible_timer:
+                self.invincible = False
+        
+        # Movement based on pattern
+        if self.attack_pattern == 'chase':
+            dx = player_rect.centerx - self.rect.centerx
+            dy = player_rect.centery - self.rect.centery
+            dist = max(1, math.hypot(dx, dy))
+            self.rect.x += (dx / dist) * self.speed * 2
+            self.rect.y += (dy / dist) * self.speed * 2
+            
+        elif self.attack_pattern == 'sweep':
+            self.phase += 0.05
+            self.rect.y = SCREEN_HEIGHT // 2 + math.sin(self.phase) * 200
+            self.rect.x += self.speed * 3 * self.direction
+            if self.rect.right < 0 or self.rect.left > SCREEN_WIDTH:
+                self.direction *= -1
+                self.flip_images()
+                
+        elif self.attack_pattern == 'charge':
+            dx = player_rect.centerx - self.rect.centerx
+            dy = player_rect.centery - self.rect.centery
+            dist = max(1, math.hypot(dx, dy))
+            self.rect.x += (dx / dist) * self.speed * 4
+            self.rect.y += (dy / dist) * self.speed * 4
+        
+        # Animation
+        self.image = self.open_image if (current_time // 500) % 2 else self.closed_image
+        
+        # Flash when invincible
+        if self.invincible and (current_time // 100) % 2:
+            self.image.set_alpha(128)
+        else:
+            self.image.set_alpha(255)
+    
+    def flip_images(self):
+        self.closed_image = pygame.transform.flip(self.closed_image, True, False)
+        self.open_image = pygame.transform.flip(self.open_image, True, False)
+    
+    def take_damage(self):
+        if self.invincible:
+            return False
+        self.health -= 1
+        self.invincible = True
+        self.invincible_timer = pygame.time.get_ticks() + 500
+        assets.play_sound('boss_hit', 0.8)
+        if self.health <= 0:
+            self.defeated = True
+            assets.play_sound('boss_defeated', 0.9)
+        return self.defeated
+    
+    def draw_health_bar(self, surface):
+        bar_width = 200
+        bar_height = 20
+        x = SCREEN_WIDTH // 2 - bar_width // 2
+        y = 20
+        
+        # Background
+        pygame.draw.rect(surface, (60, 60, 60), (x, y, bar_width, bar_height))
+        # Health
+        health_width = int(bar_width * (self.health / self.max_health))
+        pygame.draw.rect(surface, (255, 0, 0), (x, y, health_width, bar_height))
+        # Border
+        pygame.draw.rect(surface, (255, 255, 255), (x, y, bar_width, bar_height), 2)
+        # Text
+        boss_text = assets.fonts['indicator_bold'].render(f"BOSS LV.{self.level}", True, (255, 255, 0))
+        text_rect = boss_text.get_rect(center=(SCREEN_WIDTH // 2, y + bar_height + 15))
+        surface.blit(boss_text, text_rect)
+
 
 class Player(pygame.sprite.Sprite):
     def __init__(self):
@@ -310,10 +497,15 @@ class Player(pygame.sprite.Sprite):
         self.combo_timer = COMBO_TIMEOUT
         self.combo_end_time = pygame.time.get_ticks() + COMBO_TIMEOUT
         
-        # Play combo sound
-        if self.combo_count in [3, 5, 10]:
-            # assets.play_sound('eat_combo', 0.8) # Placeholder
-            pass
+        # Play combo sound with increasing pitch feel
+        if self.combo_count == 3:
+            assets.play_sound('combo_3', 0.6)
+        elif self.combo_count == 5:
+            assets.play_sound('combo_5', 0.7)
+        elif self.combo_count == 10:
+            assets.play_sound('combo_10', 0.9)
+        elif self.combo_count > 10 and self.combo_count % 5 == 0:
+            assets.play_sound('combo_10', 1.0)
     
     def take_damage(self):
         if self.invincible or self.ultimate_active:
