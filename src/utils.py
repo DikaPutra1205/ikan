@@ -243,7 +243,7 @@ class DailyChallengeManager:
         
         # Title
         font_title = pygame.font.Font(None, 22)
-        title_text = font_title.render(f"📅 Daily: {challenge['name']}", True, (255, 215, 0))
+        title_text = font_title.render(f"Daily: {challenge['name']}", True, (255, 215, 0))
         surface.blit(title_text, (box_x + 10, box_y + 8))
         
         # Progress bar
@@ -260,7 +260,7 @@ class DailyChallengeManager:
         
         # Progress text
         font_prog = pygame.font.Font(None, 18)
-        status = "✅ Complete!" if self.completed else f"{self.progress}/{challenge['target']}"
+        status = "Complete!" if self.completed else f"{self.progress}/{challenge['target']}"
         prog_text = font_prog.render(status, True, (255, 255, 255))
         surface.blit(prog_text, (bar_x + bar_width // 2 - prog_text.get_width() // 2, bar_y + 16))
 
